@@ -230,6 +230,7 @@ var templateFunctions = template.FuncMap{
 	"filterColumnsByAuto":    drivers.FilterColumnsByAuto,
 	"filterColumnsByDefault": drivers.FilterColumnsByDefault,
 	"filterColumnsByEnum":    drivers.FilterColumnsByEnum,
+	"filterColumnsByUnique":  drivers.FilterColumnsByUnique,
 	"sqlColDefinitions":      drivers.SQLColDefinitions,
 	"columnNames":            drivers.ColumnNames,
 	"columnDBTypes":          drivers.ColumnDBTypes,

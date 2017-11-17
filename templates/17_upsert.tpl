@@ -50,6 +50,12 @@ func (o *{{$tableNameSingular}}) Upsert(exec boil.Executor, {{if eq .DriverName 
 		buf.WriteString(c)
 	}
 	buf.WriteByte('.')
+	{{else -}}
+	nzUniques := queries.NonZeroDefaultSet([]string{{"{"}}{{.Table.Columns | filterColumnsByUnique | columnNames | stringMap .StringFuncs.quoteWrap | join "," }}{{"}"}}, o)
+	for _, c := range nzUniques {
+		buf.WriteString(c)
+	}
+	buf.WriteByte('.')
 	{{end -}}
 	for _, c := range updateColumns {
 		buf.WriteString(c)
@@ -115,10 +121,12 @@ func (o *{{$tableNameSingular}}) Upsert(exec boil.Executor, {{if eq .DriverName 
 		}
 		cache.query = queries.BuildUpsertQueryPostgres(dialect, "{{$schemaTable}}", updateOnConflict, ret, update, conflict, insert)
 		{{else if eq .DriverName "mysql"}}
+		ret = strmangle.SetComplement(ret, nzUniques)
 		cache.query = queries.BuildUpsertQueryMySQL(dialect, "{{.Table.Name}}", update, insert)
 		cache.retQuery = fmt.Sprintf(
-			"SELECT %s FROM {{.LQ}}{{.Table.Name}}{{.RQ}} WHERE {{whereClause .LQ .RQ 0 .Table.PKey.Columns}}",
+			"SELECT %s FROM {{.LQ}}{{.Table.Name}}{{.RQ}} WHERE %s",
 			strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, ret), ","),
+			strmangle.WhereClause(string(dialect.LQ), string(dialect.RQ), 0, nzUniques),
 		)
 		{{else if eq .DriverName "mssql"}}
 		cache.query = queries.BuildUpsertQueryMSSQL(dialect, "{{.Table.Name}}", {{$varNameSingular}}PrimaryKeyColumns, update, insert, ret)
@@ -165,7 +173,8 @@ func (o *{{$tableNameSingular}}) Upsert(exec boil.Executor, {{if eq .DriverName 
 	{{if $canLastInsertID -}}
 	var lastID int64
 	{{- end}}
-	var identifierCols []interface{}
+	var uniqueMap []uint64
+	var nzUniqueCols []interface{}
 
 	if len(cache.retMapping) == 0 {
 		goto CacheNoHooks
@@ -186,18 +195,18 @@ func (o *{{$tableNameSingular}}) Upsert(exec boil.Executor, {{if eq .DriverName 
 	}
 	{{- end}}
 
-	identifierCols = []interface{}{
-		{{range .Table.PKey.Columns -}}
-		o.{{. | titleCase}},
-		{{end -}}
+	uniqueMap, err = queries.BindMapping({{$varNameSingular}}Type, {{$varNameSingular}}Mapping, nzUniques)
+	if err != nil {
+		return errors.Wrap(err, "{{.PkgName}}: unable to retrieve unique values for {{.Table.Name}}")
 	}
+	nzUniqueCols = queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), uniqueMap)
 
 	if boil.DebugMode {
 		fmt.Fprintln(boil.DebugWriter, cache.retQuery)
-		fmt.Fprintln(boil.DebugWriter, identifierCols...)
+		fmt.Fprintln(boil.DebugWriter, nzUniqueCols...)
 	}
 
-	err = exec.QueryRow(cache.retQuery, identifierCols...).Scan(returns...)
+	err = exec.QueryRow(cache.retQuery, nzUniqueCols...).Scan(returns...)
 	if err != nil {
 		return errors.Wrap(err, "{{.PkgName}}: unable to populate default values for {{.Table.Name}}")
 	}

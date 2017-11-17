@@ -86,3 +86,21 @@ func TestFilterColumnsByEnum(t *testing.T) {
 		t.Errorf("Invalid result: %#v", res)
 	}
 }
+
+func TestFilterColumnsByUnique(t *testing.T) {
+	t.Parallel()
+
+	cols := []Column{
+		{Name: "col1", Unique: true},
+		{Name: "col2", Unique: false},
+		{Name: "col3", Unique: true},
+	}
+
+	res := FilterColumnsByUnique(cols)
+	if res[0].Name != `col1` {
+		t.Errorf("Invalid result: %#v", res)
+	}
+	if res[1].Name != `col3` {
+		t.Errorf("Invalid result: %#v", res)
+	}
+}

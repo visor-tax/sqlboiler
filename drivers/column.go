@@ -95,3 +95,16 @@ func FilterColumnsByEnum(columns []Column) []Column {
 
 	return cols
 }
+
+// FilterColumnsByUnique generates the list of columns that are unique.
+func FilterColumnsByUnique(columns []Column) []Column {
+	var cols []Column
+
+	for _, c := range columns {
+		if c.Unique {
+			cols = append(cols, c)
+		}
+	}
+
+	return cols
+}
